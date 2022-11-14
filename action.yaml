@@ -1,0 +1,72 @@
+name: Check Job Status
+inputs:
+  sha:
+    description: SHA of the Git Commit to Check
+    required: true
+    type: string
+  jobs:
+    description: Comma-separated list of Jobs to Check
+    required: true
+    type: string
+  fail:
+    description: If true will fail if required count of approvals is not met
+    required: false
+    default: false
+    type: boolean
+outputs:
+  result:
+    description: Truth value whether the requested jobs are in success state
+    value: ${{ steps.check.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - name: Control if Given Jobs Have Completed Successfully
+      uses: actions/github-script@v6
+      id: check
+      with:
+        result-encoding: string
+        script: |
+          // Split input jobs to an array.
+          const jobs = "${{ inputs.jobs }}".split(',');
+          // Retrieve job statuses from GitHub API
+          const checkRuns = await github.request('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: "${{ inputs.sha }}"
+          })
+
+          // Get requested job conclusions from the API result.
+          var conclusions = {};
+          for await (const cr of checkRuns.data.check_runs) {
+            const conclusion = cr.conclusion ?? "not available"
+            console.log(`Conclusion of job ${cr.name} was ${conclusion}.`)
+            for (const job of jobs) {
+              if (cr.name == job) {
+                conclusions[job] = conclusion
+              }
+            }
+          }
+
+          // Construct result variable
+          var resultMsg = "";
+          for (const job of jobs) {
+            const conclusion = conclusions[job]
+            if (conclusion != "success") {
+              resultMsg += `Result of job ${job} was ${conclusion}, success expected!\n`
+            }
+          }
+
+          // Fail if there was an unsuccessful job
+          if (resultMsg.length > 0) {
+            if (${{ inputs.fail }}) {
+              core.setFailed(resultMsg)
+            }
+            else {
+              console.log(resultMsg)            
+            }
+
+            return false
+          }
+          
+          console.log("All required checks have passed successfully!")
+          return true
