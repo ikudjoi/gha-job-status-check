@@ -8,3 +8,13 @@ Requires the checks read permission to your workflow:
 permissions:
   checks: read
 ```
+
+# usage
+
+```yaml
+  - uses: ikudjoi/gha-job-status-check@main
+    with:
+      sha: [pr head branch sha]
+      jobs: job,names,separated,by,comma
+      fail: false
+```
